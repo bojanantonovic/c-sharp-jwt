@@ -1,0 +1,11 @@
+bin/
+obj/
+.idea/
+.claude/
+.vs/
+.DS_Store
+
+# EF Core SQLite runtime database (not source-controlled; migrations recreate it)
+*.db
+*.db-shm
+*.db-wal
