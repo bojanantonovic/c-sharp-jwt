@@ -1,3 +1,5 @@
+using System;
+
 namespace c_sharp_jwt.Common;
 
 /// <summary>Body of every error response that does not carry per-field information.</summary>

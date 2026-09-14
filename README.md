@@ -5,7 +5,8 @@ Stateless JWT authentication for an ASP.NET Core 10 minimal API, built on the fr
 
 It is the ASP.NET counterpart of [`spring-boot-oauth2-jwt`](../../IdeaProjects/spring-boot-oauth2-jwt):
 same endpoints, same domain model, same token on the wire, same tests — only the framework differs.
-[`COMPARISON.md`](COMPARISON.md) lists what the two projects share and where they diverge.
+[`COMPARISON.md`](COMPARISON.md) lists what the two projects share and where they diverge,
+[`PROGRAM.md`](PROGRAM.md) walks through the composition root line by line.
 
 ## Endpoints
 

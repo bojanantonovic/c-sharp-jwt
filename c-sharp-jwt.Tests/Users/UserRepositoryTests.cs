@@ -1,7 +1,9 @@
-using c_sharp_jwt.Data;
-using c_sharp_jwt.Users;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Xunit;
+using c_sharp_jwt.Data;
+using c_sharp_jwt.Users;
 
 namespace c_sharp_jwt.Tests.Users;
 

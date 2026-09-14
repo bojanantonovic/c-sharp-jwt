@@ -1,3 +1,5 @@
+using System;
+
 namespace c_sharp_jwt.Auth;
 
 /// <summary>

@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
+
 namespace c_sharp_jwt.Common;
 
 /// <summary>Body of a rejected request, carrying one message per offending field.</summary>

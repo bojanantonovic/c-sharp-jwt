@@ -1,3 +1,4 @@
+
 namespace c_sharp_jwt.Tests;
 
 public static class TestDatabase
