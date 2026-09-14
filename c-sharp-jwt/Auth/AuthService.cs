@@ -1,42 +1,43 @@
 using c_sharp_jwt.Auth.Dto;
-using c_sharp_jwt.Data;
 using c_sharp_jwt.Security;
 using c_sharp_jwt.Users;
-using Microsoft.EntityFrameworkCore;
 
 namespace c_sharp_jwt.Auth;
 
-public class AuthService(AppDbContext dbContext, JwtTokenService jwtTokenService)
+public class AuthService(IUserRepository userRepository, IPasswordHasher passwordHasher, ITokenService tokenService)
 {
-    public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
+    public async Task<AuthResponse> RegisterAsync(RegisterRequest request,
+                                                  CancellationToken cancellationToken = default)
     {
-        if (await dbContext.Users.AnyAsync(user => user.Email == request.Email))
+        if (await userRepository.ExistsByEmailAsync(request.Email, cancellationToken))
         {
             throw new EmailAlreadyInUseException(request.Email);
         }
 
-        var user = new User
-        {
-            Email = request.Email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            Role = Role.User
-        };
-        dbContext.Users.Add(user);
-        await dbContext.SaveChangesAsync();
+        var user = ToUser(request);
+        await userRepository.CreateAsync(user, cancellationToken);
 
-        var token = jwtTokenService.GenerateToken(user.Email);
-        return AuthResponse.Of(token, user.Email);
+        return TokenFor(user);
     }
 
-    public async Task<AuthResponse> LoginAsync(LoginRequest request)
+    public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(user => user.Email == request.Email);
-        if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        var user = await userRepository.FindByEmailAsync(request.Email, cancellationToken);
+        if (user is null || !passwordHasher.Verify(request.Password, user.PasswordHash))
         {
             throw new InvalidCredentialsException();
         }
 
-        var token = jwtTokenService.GenerateToken(user.Email);
-        return AuthResponse.Of(token, user.Email);
+        return TokenFor(user);
     }
+
+    private User ToUser(RegisterRequest request) => new()
+    {
+        Email = request.Email,
+        PasswordHash = passwordHasher.Hash(request.Password),
+        Role = Role.User
+    };
+
+    private AuthResponse TokenFor(User user) =>
+        AuthResponse.Of(tokenService.GenerateToken(user.Email, UserRolesMapper.RolesOf(user)), user.Email);
 }

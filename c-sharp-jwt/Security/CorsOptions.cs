@@ -1,8 +1,11 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace c_sharp_jwt.Security;
 
 public class CorsOptions
 {
     public const string SectionName = "Cors";
 
-    public required string[] AllowedOrigins { get; set; }
+    [MinLength(1)]
+    public string[] AllowedOrigins { get; set; } = [];
 }
