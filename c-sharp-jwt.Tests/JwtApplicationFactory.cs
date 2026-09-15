@@ -59,9 +59,9 @@ public class JwtApplicationFactory : WebApplicationFactory<Program>
     /// Drops everything <c>AddDbContext&lt;AppDbContext&gt;</c> registered, including the option configuration
     /// entries EF Core adds beside the context itself, so the replacement is the only registration left.
     /// </summary>
-    private static void RemoveDbContextRegistrations(IServiceCollection services)
+    private static void RemoveDbContextRegistrations(IServiceCollection serviceCollection)
     {
-        var registrations = services
+        var registrations = serviceCollection
             .Where(descriptor => descriptor.ServiceType == typeof(AppDbContext)
                                  || (descriptor.ServiceType.IsGenericType
                                      && descriptor.ServiceType.GetGenericArguments().Contains(typeof(AppDbContext))))
@@ -69,7 +69,7 @@ public class JwtApplicationFactory : WebApplicationFactory<Program>
 
         foreach (var registration in registrations)
         {
-            services.Remove(registration);
+            serviceCollection.Remove(registration);
         }
     }
 }
