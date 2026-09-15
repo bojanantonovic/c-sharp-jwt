@@ -22,21 +22,21 @@ covers the container itself in more depth — what is registered, with which lif
  9  // The composition root: every service resolved at runtime is registered here or by an extension method called
 10  // here. See DEPENDENCY-INJECTION.md, and DEPENDENCY-INJECTION-COMPARISON.md for how this differs from Spring.
 11
-12  // CreateBuilder assembles builder.Configuration from appsettings.json, appsettings.{Environment}.json, user
-13  // secrets, environment variables and the command line — in that order, a later source overriding an earlier one.
-14  // The integration tests add an in-memory source on top of it, which is how they replace the connection string
-15  // and the Jwt section without touching appsettings.json.
-16  var builder = WebApplication.CreateBuilder(args);
+12  // CreateBuilder assembles the configuration from appsettings.json, appsettings.{Environment}.json, user
+13  // secrets, environment variables and the command line — in that order, a later source overriding an earlier
+14  // one. The integration tests add an in-memory source on top of it, which is how they replace the connection
+15  // string and the Jwt section without touching appsettings.json.
+16  var webApplicationBuilder = WebApplication.CreateBuilder(args);
 17
-18  builder.Services
+18  webApplicationBuilder.Services
 19      // PersistenceConfiguration.AddPersistence: takes the configuration explicitly because it reads
 20      // ConnectionStrings:Default from it, and registers AppDbContext (scoped, its DbContextOptions built from
 21      // that connection string) together with IUserRepository -> UserRepository.
-22      .AddPersistence(builder.Configuration)
+22      .AddPersistence(webApplicationBuilder.Configuration)
 23      // SecurityConfiguration.AddApplicationSecurity: binds the Jwt and Cors sections to JwtOptions/CorsOptions,
 24      // validated on start-up, and registers everything that reads them — ITokenService, IPasswordHasher, the
 25      // named CORS policy, the JWT bearer handler and the deny-by-default authorization policy.
-26      .AddApplicationSecurity(builder.Configuration)
+26      .AddApplicationSecurity(webApplicationBuilder.Configuration)
 27      // AuthService is a concrete class with no interface, so nothing else registers it. Its constructor
 28      // parameters (IUserRepository, IPasswordHasher, ITokenService) are all satisfied by the two calls above.
 29      // Scoped, because it depends on the scoped repository, which depends on the scoped AppDbContext.
@@ -48,19 +48,19 @@ covers the container itself in more depth — what is registered, with which lif
 35      // IExceptionHandler claims, and what makes the argument-less overload below valid in the first place.
 36      .AddProblemDetails();
 37
-38  // Build() closes the service collection and turns it into the root IServiceProvider behind app.Services.
-39  // After this line services are resolved, not registered.
-40  var app = builder.Build();
+38  // Build() closes the service collection and turns it into the root IServiceProvider that the WebApplication
+39  // exposes as its Services. After this line services are resolved, not registered.
+40  var webApplication = webApplicationBuilder.Build();
 41
-42  // PersistenceConfiguration.MigrateDatabase: opens a scope on app.Services, resolves AppDbContext from it — the
-43  // context is scoped, so it cannot be taken from the root provider — and applies the EF Core migrations before
-44  // the first request is served.
-45  app.MigrateDatabase();
+42  // PersistenceConfiguration.MigrateDatabase: opens a scope on webApplication.Services, resolves AppDbContext
+43  // from it — the context is scoped, so it cannot be taken from the root provider — and applies the EF Core
+44  // migrations before the first request is served.
+45  webApplication.MigrateDatabase();
 46
 47  // No arguments and no lambda: the middleware resolves the IExceptionHandler instances from the container, in
 48  // registration order, and asks each one whether it handles the exception. ApiExceptionHandler returning false
 49  // leaves the response to the ProblemDetails writer added above.
-50  app.UseExceptionHandler()
+50  webApplication.UseExceptionHandler()
 51      // Applies the policy that ConfigureCorsPolicy added to the framework's CorsOptions under this name.
 52      // The name is a constant on SecurityConfiguration so that the registering and the using side cannot drift.
 53      .UseCors(SecurityConfiguration.CorsPolicyName)
@@ -76,10 +76,10 @@ covers the container itself in more depth — what is registered, with which lif
 63  // from the request (the JSON body, the ClaimsPrincipal, the CancellationToken) or, for anything it does not
 64  // recognise as request data, from the container — AuthService here, and the ValidationFilter<T> instances that
 65  // the endpoint filters attach.
-66  app.MapAuthEndpoints()
+66  webApplication.MapAuthEndpoints()
 67      .MapUserEndpoints();
 68
-69  app.Run();
+69  webApplication.Run();
 70
 71  /// <summary>
 72  /// Exposed so that the integration tests can boot the real application through <c>WebApplicationFactory</c>.
@@ -101,8 +101,8 @@ extension method it calls (`AddPersistence`, `AddApplicationSecurity`, `MapAuthE
 ## Lines 9–16 — the builder and where configuration comes from
 
 `WebApplication.CreateBuilder(args)` (line 16) creates the two things the rest of the file works with:
-`builder.Services`, an empty-ish `IServiceCollection`, and `builder.Configuration`, already populated from the
-default sources. Each source overrides the previous one:
+`webApplicationBuilder.Services`, an empty-ish `IServiceCollection`, and `webApplicationBuilder.Configuration`,
+already populated from the default sources. Each source overrides the previous one:
 
 | Order | Source                                        |
 |-------|-----------------------------------------------|
@@ -124,7 +124,7 @@ tests substitute an in-memory connection string and a fixed `Jwt` section while 
 One fluent chain, because every `Add…` returns the `IServiceCollection` it was called on. The order within the
 chain does not matter — these are declarations, and nothing is constructed until something asks for it.
 
-### Lines 19–22 — `AddPersistence(builder.Configuration)`
+### Lines 19–22 — `AddPersistence(webApplicationBuilder.Configuration)`
 
 From `Data/PersistenceConfiguration.cs`:
 
@@ -142,7 +142,8 @@ public static IServiceCollection AddPersistence(this IServiceCollection services
 ```
 
 The configuration is a parameter rather than something the method resolves, because at this point in the file
-there is no `IServiceProvider` to resolve anything from — `builder.Build()` is still twenty lines away. This is
+there is no `IServiceProvider` to resolve anything from — `webApplicationBuilder.Build()` is still twenty lines
+away. This is
 the reason both configuration extensions in this project have that signature.
 
 `GetConnectionString("Default")` reads `ConnectionStrings:Default`. A missing entry throws here, during
@@ -152,7 +153,7 @@ registration, rather than producing a `DbContext` that fails on the first query.
 `DbContextOptions<AppDbContext>` its constructor takes. That lifetime is the reason `UserRepository` and
 `AuthService` are scoped as well, and the reason line 45 needs a scope of its own.
 
-### Lines 23–26 — `AddApplicationSecurity(builder.Configuration)`
+### Lines 23–26 — `AddApplicationSecurity(webApplicationBuilder.Configuration)`
 
 The larger of the two, from `Security/SecurityConfiguration.cs`. It does six things:
 
@@ -211,15 +212,15 @@ Registers the `ProblemDetails` writer, which does two jobs here. It is the fallb
 what makes the argument-less `UseExceptionHandler()` on line 50 legal in the first place: without a fallback,
 that overload throws at start-up.
 
-## Lines 38–40 — `builder.Build()`
+## Lines 38–40 — `webApplicationBuilder.Build()`
 
 The dividing line of the file. Above it, services are *described*; below it, they are *resolved*. The
-`IServiceCollection` is sealed into the root `IServiceProvider` behind `app.Services`, and a later
-`builder.Services.Add…` would throw.
+`IServiceCollection` is sealed into the root `IServiceProvider` behind `webApplication.Services`, and a later
+`webApplicationBuilder.Services.Add…` would throw.
 
 Everything after this point — the migration, the four middleware, the endpoints — reads from that provider.
 
-## Lines 42–45 — `app.MigrateDatabase()`
+## Lines 42–45 — `webApplication.MigrateDatabase()`
 
 From `PersistenceConfiguration` again:
 
@@ -241,7 +242,8 @@ at start-up but needs a request-lifetime service.
 Two consequences of where this call sits:
 
 * It runs before the HTTP server is listening, so no request can ever hit a schema that has not been migrated.
-* It also runs before `app.Run()`, and therefore before the `ValidateOnStart` validators from lines 23–26 get
+* It also runs before `webApplication.Run()`, and therefore before the `ValidateOnStart` validators from lines
+  23–26 get
   their chance. A database with a bad `Jwt:Secret` in the configuration is migrated first and rejected second.
 
 In the integration tests the same call runs against the in-memory SQLite connection `JwtApplicationFactory`
@@ -307,7 +309,7 @@ Delete that line and the framework would try to deserialise a request body into 
 The fourth row is what makes `GET /api/users/me` free of a database lookup: the principal is built from the
 decoded token, so the endpoint answers from claims alone.
 
-## Line 69 — `app.Run()`
+## Line 69 — `webApplication.Run()`
 
 Starts the host and blocks until shutdown. The `ValidateOnStart` validators registered back on lines 23–26 run
 inside this call, so a `Jwt:Secret` shorter than 256 bits or a non-URI `Jwt:Issuer` fails here — before the

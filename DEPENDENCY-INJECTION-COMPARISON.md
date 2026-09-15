@@ -42,9 +42,9 @@ To find out what is in the container you start the application and read the logs
 **C#: one file, eighteen lines.** `Program.cs` lines 18–36 *are* the graph:
 
 ```csharp
-builder.Services
-    .AddPersistence(builder.Configuration)
-    .AddApplicationSecurity(builder.Configuration)
+webApplicationBuilder.Services
+    .AddPersistence(webApplicationBuilder.Configuration)
+    .AddApplicationSecurity(webApplicationBuilder.Configuration)
     .AddScoped<AuthService>()
     .AddExceptionHandler<ApiExceptionHandler>()
     .AddProblemDetails();
@@ -88,7 +88,7 @@ public class AuthService(IUserRepository userRepository, IPasswordHasher passwor
     …
 }
 // registered in Program.cs:
-builder.Services.AddScoped<AuthService>();
+webApplicationBuilder.Services.AddScoped<AuthService>();
 ```
 
 The class bodies are nearly identical. The differences are all around the edges:
@@ -245,18 +245,68 @@ services.AddOptions<JwtOptions>()
 | | Spring | C# |
 |---|---|---|
 | Registration | `@ConfigurationPropertiesScan` finds it | one `AddOptions<T>().Bind(...)` call per class |
-| Shape | `record` — immutable, constructor binding | `class` with settable properties — the binder needs them |
+| Shape | `record` — immutable, constructor binding | `class` or `record` with settable/`init` properties — the *options factory* needs a parameterless constructor |
 | Name matching | relaxed: `expiration-ms` → `expirationMs` | exact: `ExpirationMs` → `ExpirationMs` |
 | Injected as | `JwtProperties` directly | `IOptions<JwtOptions>`, then `.Value` |
 | Validation | `@Validated` + Jakarta constraints (not used here) | `ValidateDataAnnotations()` |
-| When validation runs | at context refresh | at `app.Run()`, via `ValidateOnStart()` |
+| When validation runs | at context refresh | at `webApplication.Run()`, via `ValidateOnStart()` |
 
 Two things are worth pulling out.
 
-**The record/class split is forced by the binder.** Spring's binder calls the canonical constructor, so an
-immutable record is the natural shape. `Microsoft.Extensions.Configuration`'s binder sets properties on an
-already-constructed instance, so `JwtOptions` has to be mutable. This is the single most-noticed cosmetic
-difference between the two configuration layers, and it is not a style choice on either side.
+**The shape difference comes from the options factory, not from the binder.** This is worth getting right,
+because the obvious explanation is wrong. `Microsoft.Extensions.Configuration`'s binder *can* bind through a
+constructor — `configuration.GetSection("Jwt").Get<PositionalRecord>()` works, and has since .NET 6. What cannot
+take a positional record is the options pattern around it: `OptionsFactory<TOptions>` is declared
+`where TOptions : class, new()` and creates the instance before handing it to the binder, so
+
+```csharp
+public record JwtOptions(string Secret, string Issuer, long ExpirationMs);   // ← positional
+services.AddOptions<JwtOptions>().Bind(configuration.GetSection("Jwt"));
+```
+
+fails at the first resolution with `MissingMethodException: Cannot dynamically create an instance of type
+'JwtOptions'. Reason: No parameterless constructor defined.`
+
+A **nominal** record does work, because it has an implicit parameterless constructor and the binder can reach
+`init` accessors by reflection:
+
+```csharp
+public record JwtOptions
+{
+    [Required] [MinLength(MinimumSecretLength)] public string Secret { get; init; } = string.Empty;
+    …
+}
+```
+
+So the split is narrower than it looks: C# cannot express the *positional* Java-record shape as an options
+class, but the nominal form is available — which makes the choice a style decision rather than the hard
+constraint it is usually described as.
+
+`JwtOptions` and `CorsOptions` are plain classes anyway, and the reason is worth recording, because the record
+version was written and then withdrawn. Nothing in this project compares options for equality or clones them
+with a `with` expression, so two of the three record features are dead weight. The third is actively unhelpful:
+the generated `ToString` prints every property, which would put the signing secret into any log line or
+exception message that formats `JwtOptions` — suppressing that took a hand-written `PrintMembers` override plus
+the tests to guard it, roughly fifty lines defending against a hazard the record itself introduced.
+
+What the exercise did leave behind is `init` instead of `set`. That needs no record at all, and is what both
+options classes use today:
+
+```csharp
+public class JwtOptions
+{
+    [Required] [MinLength(MinimumSecretLength)] public string Secret { get; init; } = string.Empty;
+    …
+}
+```
+
+Records remain the right shape elsewhere in this project — `AuthResponse`, `CurrentUserResponse`, `ApiError` and
+the request DTOs are all records, because those genuinely are compared and serialised. An options class is a
+container that is filled once and only read.
+
+(One caveat either way: the source-generated configuration binder used for trimmed and AOT-published
+applications assigns properties directly, which `init` accessors do not allow from outside the type — verify
+before enabling `EnableConfigurationBindingGenerator`.)
 
 **The `IOptions<T>` wrapper buys reloading and named options.** Spring injects the properties object itself;
 ASP.NET injects a wrapper you have to unwrap with `.Value`. The wrapper exists because there are three variants:
@@ -418,10 +468,11 @@ The most practical difference, and the one worth internalising before switching 
 | Two candidates for one type | `NoUniqueBeanDefinitionException` unless `@Primary`/`@Qualifier` | **silent** — the last registration wins |
 | Circular dependency | detected; fails for constructor injection, resolvable with `@Lazy` | always throws, no escape hatch |
 | Wrong lifetime (captive dependency) | not checked | throws — `ValidateScopes`, on by default in Development |
-| Bad configuration value | only if `@Validated` is present | at `app.Run()` if `ValidateOnStart()` was called |
+| Bad configuration value | only if `@Validated` is present | at `webApplication.Run()` if `ValidateOnStart()` was called |
 
 The first row needs the detail. ASP.NET Core does have a start-up check — `ValidateOnBuild`, on by default in
-Development — that tries to construct every *registered* service when `builder.Build()` runs, and fails there if
+Development — that tries to construct every *registered* service when `webApplicationBuilder.Build()` runs, and
+fails there if
 one of them cannot be satisfied. What it cannot check is anything that is not a registration: the parameter list
 of a minimal API delegate is not a service descriptor, so a missing `AddScoped<AuthService>()` surfaces on the
 first request to `/api/auth/register`, not at start-up. And in Production both validations default to off.

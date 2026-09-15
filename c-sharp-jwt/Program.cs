@@ -9,10 +9,10 @@ using c_sharp_jwt.Users;
 // The composition root: every service resolved at runtime is registered here or by an extension method called
 // here. See DEPENDENCY-INJECTION.md, and DEPENDENCY-INJECTION-COMPARISON.md for how this differs from Spring.
 
-// CreateBuilder assembles builder.Configuration from appsettings.json, appsettings.{Environment}.json, user
-// secrets, environment variables and the command line — in that order, a later source overriding an earlier one.
-// The integration tests add an in-memory source on top of it, which is how they replace the connection string
-// and the Jwt section without touching appsettings.json.
+// CreateBuilder assembles the configuration from appsettings.json, appsettings.{Environment}.json, user
+// secrets, environment variables and the command line — in that order, a later source overriding an earlier
+// one. The integration tests add an in-memory source on top of it, which is how they replace the connection
+// string and the Jwt section without touching appsettings.json.
 var webApplicationBuilder = WebApplication.CreateBuilder(args);
 
 webApplicationBuilder.Services
@@ -35,13 +35,13 @@ webApplicationBuilder.Services
     // IExceptionHandler claims, and what makes the argument-less overload below valid in the first place.
     .AddProblemDetails();
 
-// Build() closes the service collection and turns it into the root IServiceProvider behind app.Services.
-// After this line services are resolved, not registered.
+// Build() closes the service collection and turns it into the root IServiceProvider that the WebApplication
+// exposes as its Services. After this line services are resolved, not registered.
 var webApplication = webApplicationBuilder.Build();
 
-// PersistenceConfiguration.MigrateDatabase: opens a scope on app.Services, resolves AppDbContext from it — the
-// context is scoped, so it cannot be taken from the root provider — and applies the EF Core migrations before
-// the first request is served.
+// PersistenceConfiguration.MigrateDatabase: opens a scope on webApplication.Services, resolves AppDbContext
+// from it — the context is scoped, so it cannot be taken from the root provider — and applies the EF Core
+// migrations before the first request is served.
 webApplication.MigrateDatabase();
 
 // No arguments and no lambda: the middleware resolves the IExceptionHandler instances from the container, in

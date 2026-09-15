@@ -20,21 +20,22 @@ There are three separate mechanisms at work, and they are easy to confuse:
 ## 1. Two phases
 
 ```
-builder.Services.…      registration     — descriptors are added to an IServiceCollection
-─── builder.Build() ────────────────────────────────────────────────────────────────────
-app.Use…() / app.Map…() resolution       — services are pulled out of the IServiceProvider
+webApplicationBuilder.Services.…  registration  — descriptors are added to an IServiceCollection
+─── webApplicationBuilder.Build() ──────────────────────────────────────────────────────
+webApplication.Use…() / .Map…()   resolution    — services are pulled out of the IServiceProvider
 ```
 
-`WebApplication.CreateBuilder(args)` produces the `IServiceCollection` (`builder.Services`) and the
-`IConfiguration` (`builder.Configuration`). Everything above `builder.Build()` only *describes* services;
-nothing is constructed yet. `Build()` freezes the collection into the root `IServiceProvider` exposed as
-`app.Services`.
+`WebApplication.CreateBuilder(args)` produces the `IServiceCollection` (`webApplicationBuilder.Services`) and
+the `IConfiguration` (`webApplicationBuilder.Configuration`). Everything above `webApplicationBuilder.Build()`
+only *describes* services; nothing is constructed yet. `Build()` freezes the collection into the root
+`IServiceProvider` exposed as `webApplication.Services`.
 
-That is why `AddPersistence` and `AddApplicationSecurity` take `builder.Configuration` as a parameter: at
+That is why `AddPersistence` and `AddApplicationSecurity` take `webApplicationBuilder.Configuration` as a
+parameter: at
 registration time there is no provider to resolve `IConfiguration` from, so the configuration is handed over
 explicitly.
 
-### Where `builder.Configuration` itself comes from
+### Where `webApplicationBuilder.Configuration` itself comes from
 
 `CreateBuilder` stacks the default configuration sources, each one overriding the previous:
 
@@ -293,4 +294,4 @@ the production ones, resolved through the production graph. Only the leaf change
 * Depend on the interface (`IUserRepository`, `ITokenService`, `IPasswordHasher`) where a seam is wanted for
   testing; depend on the concrete class (`AuthService`, `AppDbContext`) where there is no second implementation.
 * Let the lifetime follow the state: no state → singleton, per-request state → scoped.
-* Never resolve from `app.Services` in request handling code; create an explicit scope for start-up work.
+* Never resolve from the root provider in request handling code; create an explicit scope for start-up work.
