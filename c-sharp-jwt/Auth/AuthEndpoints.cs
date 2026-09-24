@@ -24,8 +24,8 @@ public static class AuthEndpoints
             .AddEndpointFilter<ValidationFilter<RegisterRequest>>();
 
         group.MapPost(LoginPath,
-                async (LoginRequest request, AuthService authService, CancellationToken cancellationToken) =>
-                    Results.Ok(await authService.LoginAsync(request, cancellationToken)))
+                (LoginRequest request, AuthService authService, CancellationToken cancellationToken) =>
+                    authService.LoginAsync(request, cancellationToken))
             .AddEndpointFilter<ValidationFilter<LoginRequest>>();
 
         return app;

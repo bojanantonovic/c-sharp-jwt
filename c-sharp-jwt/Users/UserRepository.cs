@@ -14,9 +14,10 @@ public class UserRepository(AppDbContext dbContext) : IUserRepository
     public Task<bool> ExistsByEmailAsync(string email, CancellationToken cancellationToken = default) =>
         dbContext.Users.AnyAsync(user => user.Email == email, cancellationToken);
 
-    public async Task CreateAsync(User user, CancellationToken cancellationToken = default)
+    public Task CreateAsync(User user, CancellationToken cancellationToken = default)
     {
         dbContext.Users.Add(user);
-        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return dbContext.SaveChangesAsync(cancellationToken);
     }
 }
