@@ -18,39 +18,41 @@ public static class SecurityConfiguration
 {
     public const string CorsPolicyName = "AngularClient";
 
-    public static IServiceCollection AddApplicationSecurity(this IServiceCollection serviceCollection,
-                                                            IConfiguration configuration)
+    extension(IServiceCollection serviceCollection)
     {
-        serviceCollection.AddOptions<JwtOptions>()
-            .Bind(configuration.GetSection(JwtOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
+        public IServiceCollection AddApplicationSecurity(IConfiguration configuration)
+        {
+            serviceCollection.AddOptions<JwtOptions>()
+                .Bind(configuration.GetSection(JwtOptions.SectionName))
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
 
-        serviceCollection.AddOptions<CorsOptions>()
-            .Bind(configuration.GetSection(CorsOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
+            serviceCollection.AddOptions<CorsOptions>()
+                .Bind(configuration.GetSection(CorsOptions.SectionName))
+                .ValidateDataAnnotations()
+                .ValidateOnStart();
 
-        serviceCollection.AddSingleton<ITokenService, TokenService>();
-        serviceCollection.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
+            serviceCollection.AddSingleton<ITokenService, TokenService>();
+            serviceCollection.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
 
-        // Two spellings of the same registration. The explicit form names the options type being configured;
-        // ConfigureOptions<T> finds every IConfigureOptions<>/IPostConfigureOptions<>/IValidateOptions<> that the
-        // type implements. Unlike a Spring @Bean method, several of these may target the same options object —
-        // each one runs and layers its changes on top, rather than one definition winning.
-        serviceCollection.AddSingleton<IConfigureOptions<AspNetCorsOptions>, ConfigureCorsPolicy>();
-        serviceCollection.AddCors();
+            // Two spellings of the same registration. The explicit form names the options type being configured;
+            // ConfigureOptions<T> finds every IConfigureOptions<>/IPostConfigureOptions<>/IValidateOptions<> that the
+            // type implements. Unlike a Spring @Bean method, several of these may target the same options object —
+            // each one runs and layers its changes on top, rather than one definition winning.
+            serviceCollection.AddSingleton<IConfigureOptions<AspNetCorsOptions>, ConfigureCorsPolicy>();
+            serviceCollection.AddCors();
 
-        serviceCollection.ConfigureOptions<ConfigureJwtBearerOptions>();
-        serviceCollection.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer();
+            serviceCollection.ConfigureOptions<ConfigureJwtBearerOptions>();
+            serviceCollection.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer();
 
-        // Deny by default: an endpoint that declares no authorization of its own needs an authenticated user,
-        // so forgetting RequireAuthorization on a new endpoint cannot silently make it public.
-        serviceCollection.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder()
-                                      .RequireAuthenticatedUser()
-                                      .Build());
+            // Deny by default: an endpoint that declares no authorization of its own needs an authenticated user,
+            // so forgetting RequireAuthorization on a new endpoint cannot silently make it public.
+            serviceCollection.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                                          .RequireAuthenticatedUser()
+                                          .Build());
 
-        return serviceCollection;
+            return serviceCollection;
+        }
     }
 }

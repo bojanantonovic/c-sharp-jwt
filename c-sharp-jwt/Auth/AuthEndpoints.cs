@@ -13,21 +13,24 @@ public static class AuthEndpoints
     private const string RegisterPath = "/register";
     private const string LoginPath = "/login";
 
-    public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
+    extension(IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup(BasePath).AllowAnonymous();
+        public IEndpointRouteBuilder MapAuthEndpoints()
+        {
+            var group = app.MapGroup(BasePath).AllowAnonymous();
 
-        group.MapPost(RegisterPath,
-                async (RegisterRequest request, AuthService authService, CancellationToken cancellationToken) =>
-                    Results.Json(await authService.RegisterAsync(request, cancellationToken),
-                                 statusCode: StatusCodes.Status201Created))
-            .AddEndpointFilter<ValidationFilter<RegisterRequest>>();
+            group.MapPost(RegisterPath,
+                    async (RegisterRequest request, AuthService authService, CancellationToken cancellationToken) =>
+                        Results.Json(await authService.RegisterAsync(request, cancellationToken),
+                                     statusCode: StatusCodes.Status201Created))
+                .AddEndpointFilter<ValidationFilter<RegisterRequest>>();
 
-        group.MapPost(LoginPath,
-                (LoginRequest request, AuthService authService, CancellationToken cancellationToken) =>
-                    authService.LoginAsync(request, cancellationToken))
-            .AddEndpointFilter<ValidationFilter<LoginRequest>>();
+            group.MapPost(LoginPath,
+                    (LoginRequest request, AuthService authService, CancellationToken cancellationToken) =>
+                        authService.LoginAsync(request, cancellationToken))
+                .AddEndpointFilter<ValidationFilter<LoginRequest>>();
 
-        return app;
+            return app;
+        }
     }
 }
